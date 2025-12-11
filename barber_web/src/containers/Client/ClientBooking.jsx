@@ -7,55 +7,54 @@ import TimeSelector from '../../components/Client/TimeSelector';
 import BookingConfirmation from '../../components/Client/BookingConfirmation';
 import ClientForm from '../../components/Client/ClientForm';
 
-// --- MOCK DE SERVICIOS (Parte del MODELO) ---
-const SERVICIOS = [
-  { id: 's1', nombre: 'Corte Clásico', duracion: 45, precio: 15 },
-  { id: 's2', nombre: 'Arreglo de Barba', duracion: 30, precio: 10 },
-  { id: 's3', nombre: 'Corte + Barba', duracion: 75, precio: 25 },
-];
-// ---------------------------------------------
-
-
 function ClientBooking() {
   const [paso, setPaso] = useState(1);
   const [datosReserva, setDatosReserva] = useState({});
   const [mensajeConfirmacion, setMensajeConfirmacion] = useState('');
 
-  const { barberos, crearCita, citas } = useCitas(); 
+  // Importamos todos los datos y lógicas necesarios del Modelo/Controlador
+  const { barberos, crearCita, citas, isTimeBlocked, servicios } = useCitas(); 
   
-  // Lógica para determinar disponibilidad (CONTROLADOR)
+  // CONTROLADOR: Lógica para determinar disponibilidad
   const getDisponibilidad = (barberoId, fecha) => {
-      // Lógica de disponibilidad Simplificada (Horas en punto)
+      // 1. Horarios base (en un proyecto real, esto sería dinámico)
+      const horasBase = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00'];
+      
+      // 2. Citas existentes
       const citasDelDia = citas.filter(c => c.barberoId === barberoId && c.fecha === fecha);
       
-      const horasDisponibles = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00'];
-
-      return horasDisponibles.filter(hora => 
-        !citasDelDia.some(cita => cita.hora === hora)
-      );
+      return horasBase.filter(hora => {
+        // a) Si ya está ocupada por una cita
+        const isBooked = citasDelDia.some(cita => cita.hora === hora);
+        
+        // b) Si el barbero la bloqueó manualmente
+        const isBlocked = isTimeBlocked(barberoId, fecha, hora); 
+        
+        // La hora está disponible si NO está reservada Y NO está bloqueada
+        return !isBooked && !isBlocked;
+      });
   };
-  // ---------------------------------------------
-
-  // Función para avanzar y guardar datos (CORRECTO)
+  
+  // Función para avanzar y guardar datos (Paso 1 -> 2, Paso 2 -> 3)
   const handleNextStep = (nuevosDatos) => {
     setDatosReserva(prev => ({ ...prev, ...nuevosDatos }));
     setPaso(prev => prev + 1);
   };
 
-  // Función corregida para completar la reserva (Paso 3 -> 4)
+  // Función CORREGIDA para completar la reserva (Paso 3 -> 4)
   const handleConfirmBooking = (datosCliente) => {
     
-    // 1. CREAR la estructura final de la cita
+    // 1. CREAR la estructura final de la cita (juntando datos previos + datos del cliente)
     const citaFinal = {
         ...datosReserva,
         cliente: datosCliente, 
         estado: 'confirmada' 
     };
 
-    // 2. IMPORTANTE: Actualizar el estado del controlador antes de cambiar de paso
+    // 2. IMPORTANTE: Actualizar el estado local antes de cambiar de paso (Corrige el error de 'email')
     setDatosReserva(citaFinal); 
     
-    // 3. LLAMADA AL MODELO
+    // 3. LLAMADA AL MODELO para persistir la cita
     const citaCreada = crearCita(citaFinal); 
 
     // 4. CAMBIAMOS DE PASO
@@ -65,7 +64,6 @@ function ClientBooking() {
 
   // -------------------------------------------------------------------
   
-  // ************ BLOQUE DE RETORNO (JSX) CORREGIDO ************
   return (
     <div className="client-booking">
       <h3>Paso {paso} de 4: {
@@ -74,9 +72,11 @@ function ClientBooking() {
         paso === 3 ? 'Ingresar Datos Personales' : 'Confirmación'
       }</h3>
 
+      {/* RENDERIZADO CONDICIONAL DE LOS PASOS */}
+
       {paso === 1 && (
         <ServiceBarberSelector
-          servicios={SERVICIOS}
+          servicios={servicios} // Usamos los servicios del hook (MODELO)
           barberos={barberos}
           onNext={handleNextStep}
         />
@@ -85,7 +85,7 @@ function ClientBooking() {
       {paso === 2 && (
         <TimeSelector
           datosReserva={datosReserva}
-          getDisponibilidad={getDisponibilidad} 
+          getDisponibilidad={getDisponibilidad} // Lógica de disponibilidad
           onNext={handleNextStep}
           onBack={() => setPaso(1)}
         />
@@ -102,7 +102,7 @@ function ClientBooking() {
       {paso === 4 && (
         <BookingConfirmation
           mensaje={mensajeConfirmacion}
-          datosReserva={datosReserva} // Ahora 'datosReserva' tiene 'cliente' completo
+          datosReserva={datosReserva} 
         />
       )}
       
@@ -112,7 +112,6 @@ function ClientBooking() {
       </pre>
     </div>
   );
-  // *************************************************************
 }
 
 export default ClientBooking;

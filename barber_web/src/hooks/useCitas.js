@@ -1,121 +1,156 @@
+// src/hooks/useCitas.js
+
 import { useState } from 'react';
 
 // =======================================================
 // MOCK DATA (Simulando nuestra "Base de Datos" - MODELO)
 // =======================================================
 
-// Datos de los barberos
 const BARBEROS_INICIALES = [
   { id: 'b1', nombre: 'Carlos', especialidad: 'Clásico y Barba' },
   { id: 'b2', nombre: 'Andrés', especialidad: 'Moderno y Diseños' },
   { id: 'b3', nombre: 'Sofia', especialidad: 'Estilos Femeninos' },
 ];
 
-// Datos iniciales de citas. Usamos fechas futuras para simular la semana de trabajo.
-// (Ej: 15 y 16 de Diciembre de 2025)
+const SERVICIOS_INICIALES = [
+  { id: 's1', nombre: 'Corte Clásico', duracion: 45, precio: 15 },
+  { id: 's2', nombre: 'Arreglo de Barba', duracion: 30, precio: 10 },
+  { id: 's3', nombre: 'Corte + Barba', duracion: 75, precio: 25 },
+];
+
 const CITAS_INICIALES = [
   { 
     id: 'c1', 
-    cliente: { nombre: 'Elena Gómez', telefono: '555-1001' }, 
+    cliente: { nombre: 'Elena Gómez', telefono: '555-1001', email: 'elena@mail.com' }, 
     barberoId: 'b1', 
-    servicio: 'Corte', 
+    servicio: 'Corte Clásico', // Usar nombre de servicio para mostrar en el cliente
     fecha: '2025-12-15', 
     hora: '09:00', 
-    estado: 'pendiente' // Para el barbero: pendiente de atender
+    estado: 'pendiente'
   },
   { 
     id: 'c2', 
-    cliente: { nombre: 'Ricardo Solis', telefono: '555-1002' }, 
+    cliente: { nombre: 'Ricardo Solis', telefono: '555-1002', email: 'ricardo@mail.com' }, 
     barberoId: 'b2', 
-    servicio: 'Barba', 
+    servicio: 'Arreglo de Barba', 
     fecha: '2025-12-15', 
     hora: '10:30', 
-    estado: 'confirmada' // Para el cliente: confirmada
+    estado: 'confirmada' 
   },
   { 
     id: 'c3', 
-    cliente: { nombre: 'Maria Paz', telefono: '555-1003' }, 
+    cliente: { nombre: 'Maria Paz', telefono: '555-1003', email: 'maria@mail.com' }, 
     barberoId: 'b1', 
-    servicio: 'Corte y Barba', 
+    servicio: 'Corte Clásico', 
     fecha: '2025-12-16', 
     hora: '14:00', 
     estado: 'pendiente' 
   },
 ];
 
+const BLOQUEOS_INICIALES = [
+  { 
+    id: 'b-lunch-1', 
+    barberoId: 'b1', 
+    fecha: '2025-12-16', 
+    horaInicio: '12:00', 
+    horaFin: '13:00', 
+    motivo: 'Almuerzo' 
+  },
+];
+
 
 // =======================================================
-// CUSTOM HOOK (Nuestro principal Controlador)
+// CUSTOM HOOK (Controlador)
 // =======================================================
 
-/**
- * Hook personalizado para manejar el estado y la lógica de las citas.
- * Actúa como el punto de acceso entre la Vista (componentes) y el Modelo (datos).
- */
 export function useCitas() {
   const [citas, setCitas] = useState(CITAS_INICIALES);
-  // Los barberos son fijos por ahora
   const [barberos] = useState(BARBEROS_INICIALES); 
+  const [bloqueos, setBloqueos] = useState(BLOQUEOS_INICIALES);
+  const [servicios, setServicios] = useState(SERVICIOS_INICIALES); // Estado de Servicios
 
-  /**
-   * Obtiene las citas filtradas por una fecha específica (e.g., para el dashboard del admin).
-   * @param {string} fecha - Fecha en formato 'YYYY-MM-DD'.
-   * @returns {Array} Lista de citas para esa fecha.
-   */
+  // --- Lógica de Citas (CRUD y Consultas) ---
+
   const getCitasPorFecha = (fecha) => {
     return citas.filter(cita => cita.fecha === fecha);
   };
   
-  /**
-   * Obtiene las citas de un barbero específico.
-   * @param {string} barberoId - ID del barbero.
-   * @returns {Array} Lista de citas del barbero.
-   */
-  const getCitasPorBarbero = (barberoId) => {
-      return citas.filter(cita => cita.barberoId === barberoId);
-  };
-
-  /**
-   * Crea una nueva cita (usada por el cliente).
-   * @param {object} nuevaCita - Datos de la cita a crear.
-   * @returns {object} La cita creada (incluyendo el nuevo ID).
-   */
   const crearCita = (nuevaCita) => {
-    // Generación simple de ID (en un proyecto real usaríamos un UUID)
     const newId = 'c' + (citas.length + 1 + Math.floor(Math.random() * 100)); 
     const citaConId = { 
       ...nuevaCita, 
       id: newId, 
-      // Las citas creadas por el cliente siempre inician como 'confirmada' o 'pendiente'
       estado: 'confirmada' 
     };
     
     setCitas(prevCitas => [...prevCitas, citaConId]);
-    console.log(`Cita creada: ${citaConId.id}`);
     return citaConId;
   };
 
-  /**
-   * Actualiza el estado de una cita (usada por el barbero para marcar como 'completada').
-   * @param {string} idCita - ID de la cita a modificar.
-   * @param {string} nuevoEstado - Nuevo estado ('completada', 'cancelada', 'ausente', etc.).
-   */
   const actualizarEstadoCita = (idCita, nuevoEstado) => {
     setCitas(prevCitas =>
       prevCitas.map(cita =>
         cita.id === idCita ? { ...cita, estado: nuevoEstado } : cita
       )
     );
-    console.log(`Cita ${idCita} actualizada a estado: ${nuevoEstado}`);
+  };
+  
+  // --- Lógica de Bloqueos ---
+
+  const crearBloqueo = (nuevoBloqueo) => {
+    const newId = 'block-' + (bloqueos.length + 1 + Math.floor(Math.random() * 100)); 
+    const bloqueoConId = { 
+      ...nuevoBloqueo, 
+      id: newId, 
+    };
+    
+    setBloqueos(prevBloqueos => [...prevBloqueos, bloqueoConId]);
+    return bloqueoConId;
   };
 
-  // Exponemos los datos y las funciones que los componentes necesitarán
+  const isTimeBlocked = (barberoId, fecha, hora) => {
+      // Comprueba si la hora cae dentro de un bloqueo activo
+      return bloqueos.some(bloqueo => 
+          bloqueo.barberoId === barberoId &&
+          bloqueo.fecha === fecha &&
+          bloqueo.horaInicio <= hora && 
+          bloqueo.horaFin > hora
+      );
+  };
+
+  // --- Lógica de Servicios (CRUD) ---
+  
+  const crearServicio = (nuevoServicio) => {
+    const newId = 's' + (servicios.length + 1 + Math.floor(Math.random() * 100));
+    const servicioConId = { ...nuevoServicio, id: newId };
+    setServicios(prev => [...prev, servicioConId]);
+  };
+
+  const actualizarServicio = (id, datosActualizados) => {
+    setServicios(prev => prev.map(s => 
+        s.id === id ? { ...s, ...datosActualizados } : s
+    ));
+  };
+
+  const eliminarServicio = (id) => {
+    setServicios(prev => prev.filter(s => s.id !== id));
+  };
+
+
+  // Exportamos todo el estado y la lógica de manipulación
   return {
     citas,
     barberos,
+    bloqueos,
+    servicios,
     getCitasPorFecha,
-    getCitasPorBarbero,
     crearCita,
     actualizarEstadoCita,
+    crearBloqueo,
+    isTimeBlocked,
+    crearServicio,
+    actualizarServicio,
+    eliminarServicio,
   };
 }

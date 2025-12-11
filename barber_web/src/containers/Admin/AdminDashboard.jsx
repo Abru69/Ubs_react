@@ -1,128 +1,128 @@
 // src/containers/Admin/AdminDashboard.jsx
 
 import React, { useState, useMemo } from 'react';
-import { useCitas } from '../../hooks/useCitas'; 
+import { useCitas } from '../../hooks/useCitas';
 import DailyAppointments from '../../components/Admin/DailyAppointments';
-import TimeBlocker from '../../components/Admin/TimeBlocker'; 
-import ServiceManager from '../../components/Admin/ServiceManager'; 
+import TimeBlocker from '../../components/Admin/TimeBlocker';
+import ServiceManager from '../../components/Admin/ServiceManager';
+import DataWidget from '../../components/Admin/DataWidget'; 
 
 function AdminDashboard() {
-  
-  // Desestructuramos todo lo que necesitamos del Modelo/Controlador
-  const { 
-    citas, 
-    barberos, 
-    bloqueos, 
+  const {
+    citas,
+    barberos,
+    bloqueos,
     servicios,
-    actualizarEstadoCita, 
-    crearBloqueo, 
-    crearServicio, 
-    actualizarServicio, 
-    eliminarServicio 
+    actualizarEstadoCita,
+    crearBloqueo,
+    crearServicio,
+    actualizarServicio,
+    eliminarServicio
   } = useCitas();
-  
-  // Estado para la fecha seleccionada
-  const [fechaSeleccionada, setFechaSeleccionada] = useState('2025-12-15'); 
-  
-  // ***************** NUEVOS ESTADOS DE FILTRO *****************
-  const [filtroBarbero, setFiltroBarbero] = useState('all'); 
-  const [filtroEstado, setFiltroEstado] = useState('all');   
-  // ************************************************************
 
-  // CONTROLADOR: Prepara los datos aplicando todos los filtros
+  // --- LÓGICA DE ESTADÍSTICAS ---
+  const totalCitas = citas.length;
+  const citasAceptadas = useMemo(() =>
+    citas.filter(c => c.estado === 'confirmada' || c.estado === 'completada').length,
+    [citas]
+  );
+  const citasRechazadas = useMemo(() =>
+    citas.filter(c => c.estado === 'cancelada').length,
+    [citas]
+  );
+  const totalServicios = servicios.length;
+  const totalBarberos = barberos.length;
+  const totalClientes = useMemo(() => {
+    const uniqueEmails = new Set(citas.map(c => c.cliente.email));
+    return uniqueEmails.size;
+  }, [citas]);
+  // -----------------------------
+
+  const [fechaSeleccionada, setFechaSeleccionada] = useState('2025-12-15');
+  const [filtroBarbero, setFiltroBarbero] = useState('all');
+  const [filtroEstado, setFiltroEstado] = useState('all');
+
   const citasDelDiaFiltradas = useMemo(() => {
-    
-    // 1. Filtrar por fecha
     let citasFiltradas = citas
       .filter(cita => cita.fecha === fechaSeleccionada)
       .sort((a, b) => a.hora.localeCompare(b.hora));
 
-    // 2. Filtrar por Barbero
     if (filtroBarbero !== 'all') {
       citasFiltradas = citasFiltradas.filter(cita => cita.barberoId === filtroBarbero);
     }
-
-    // 3. Filtrar por Estado
     if (filtroEstado !== 'all') {
       citasFiltradas = citasFiltradas.filter(cita => cita.estado === filtroEstado);
     }
-    
     return citasFiltradas;
-  }, [citas, fechaSeleccionada, filtroBarbero, filtroEstado]); 
-  
-  // CONTROLADOR: Maneja la acción del barbero para cambiar el estado de la cita
+  }, [citas, fechaSeleccionada, filtroBarbero, filtroEstado]);
+
   const handleUpdateStatus = (idCita, estado) => {
-    actualizarEstadoCita(idCita, estado); 
-  };
-  
-  // CONTROLADOR: Maneja la creación de un nuevo bloqueo (soluciona el error 'handleBlockTime is not defined')
-  const handleBlockTime = (bloqueoData) => {
-    crearBloqueo(bloqueoData); 
+    actualizarEstadoCita(idCita, estado);
   };
 
-  // Función de ayuda para obtener el nombre del barbero
-  const getBarberoNombre = (barberoId) => {
-      const barbero = barberos.find(b => b.id === barberoId);
-      return barbero ? barbero.nombre : 'Barbero No Asignado';
+  const handleBlockTime = (bloqueoData) => {
+    crearBloqueo(bloqueoData);
   };
-  
-  // Lista de estados para el filtro
+
+  const getBarberoNombre = (barberoId) => {
+    const barbero = barberos.find(b => b.id === barberoId);
+    return barbero ? barbero.nombre : 'Barbero No Asignado';
+  };
+
   const ESTADOS_CITAS = ['pendiente', 'confirmada', 'completada', 'cancelada'];
-  
-  // Generamos un array de fechas simuladas para la navegación semanal
   const fechasDeEjemplo = ['2025-12-15', '2025-12-16', '2025-12-17', '2025-12-18', '2025-12-19'];
-  
+
   return (
     <div className="admin-dashboard">
-      <h1>Dashboard del Barbero</h1>
-      
-      
-      {/* VISTA Y CONTROLADOR DE GESTIÓN DE SERVICIOS */}
+      <h2>Panel de Control</h2>
+
+      {/* Widgets de Estadísticas */}
+      <div className="data-widget-grid">
+        <DataWidget title="Total Clientes" value={totalClientes} colorClass="widget-clientes-total" />
+        <DataWidget title="Total Citas" value={totalCitas} colorClass="widget-citas-total" />
+        <DataWidget title="Citas Aceptadas" value={citasAceptadas} colorClass="widget-aceptadas" />
+        <DataWidget title="Citas Rechazadas" value={citasRechazadas} colorClass="widget-rechazadas" />
+        <DataWidget title="Total Servicios" value={totalServicios} colorClass="widget-servicios-total" />
+        <DataWidget title="Total Barberos" value={totalBarberos} colorClass="widget-barberos-total" />
+      </div>
+
       <ServiceManager
         servicios={servicios}
         onCreate={crearServicio}
         onUpdate={actualizarServicio}
         onDelete={eliminarServicio}
       />
-      
-      {/* VISTA Y CONTROLADOR DE BLOQUEOS */}
+
+      {/* --- AQUÍ ESTABA EL ERROR: Cambiado 'barbers' por 'barberos' --- */}
       <TimeBlocker 
-        barberos={barberos} 
+        barberos={barberos}  
         onBlockTime={handleBlockTime} 
       />
+      {/* --------------------------------------------------------------- */}
 
-      {/* VISTA: Navegación Semanal */}
-      <div style={{ marginBottom: '20px', padding: '10px', border: '1px solid #ddd' }}>
-        <h3>Navegación Semanal:</h3>
-        {fechasDeEjemplo.map(fecha => (
-          <button
-            key={fecha}
-            onClick={() => setFechaSeleccionada(fecha)}
-            style={{ 
-              marginRight: '10px', 
-              padding: '8px',
-              backgroundColor: fecha === fechaSeleccionada ? '#007bff' : '#f8f9fa',
-              color: fecha === fechaSeleccionada ? 'white' : 'black',
-              border: '1px solid #ccc',
-              cursor: 'pointer'
-            }}
-          >
-            {fecha}
-          </button>
-        ))}
+      {/* Navegación y Filtros */}
+      <div style={{ marginBottom: '20px', padding: '10px', border: '1px solid var(--border-color)', marginTop: '20px', borderRadius: 'var(--border-radius)', background: 'var(--bg-card)' }}>
+        <h3 style={{fontSize: '1.1rem', marginBottom: '10px'}}>Navegación Semanal:</h3>
+        <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
+            {fechasDeEjemplo.map(fecha => (
+            <button
+                key={fecha}
+                onClick={() => setFechaSeleccionada(fecha)}
+                className={fecha === fechaSeleccionada ? 'btn-primary-accent' : 'btn-secondary-nav'}
+            >
+                {fecha}
+            </button>
+            ))}
+        </div>
       </div>
 
-      {/* ***************** NUEVA VISTA DE FILTROS ***************** */}
-      <div style={{ marginBottom: '20px', display: 'flex', gap: '20px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }}>
-        
-        {/* Filtro por Barbero */}
-        <div>
+      <div className="filter-container">
+        <div style={{ flex: 1 }}>
           <label htmlFor="filtroBarbero">Filtrar por Barbero:</label>
-          <select 
-            id="filtroBarbero" 
-            value={filtroBarbero} 
+          <select
+            id="filtroBarbero"
+            value={filtroBarbero}
             onChange={(e) => setFiltroBarbero(e.target.value)}
-            style={{ padding: '8px', marginLeft: '10px' }}
           >
             <option value="all">Todos los Barberos</option>
             {barberos.map(b => (
@@ -130,15 +130,12 @@ function AdminDashboard() {
             ))}
           </select>
         </div>
-
-        {/* Filtro por Estado */}
-        <div>
+        <div style={{ flex: 1 }}>
           <label htmlFor="filtroEstado">Filtrar por Estado:</label>
-          <select 
-            id="filtroEstado" 
-            value={filtroEstado} 
+          <select
+            id="filtroEstado"
+            value={filtroEstado}
             onChange={(e) => setFiltroEstado(e.target.value)}
-            style={{ padding: '8px', marginLeft: '10px' }}
           >
             <option value="all">Todos los Estados</option>
             {ESTADOS_CITAS.map(estado => (
@@ -149,27 +146,26 @@ function AdminDashboard() {
           </select>
         </div>
       </div>
-      {/* ************************************************************ */}
 
-      {/* VISTA: Citas del Día Seleccionado (Usa las citas filtradas) */}
       <DailyAppointments
         fecha={fechaSeleccionada}
-        citas={citasDelDiaFiltradas} 
+        citas={citasDelDiaFiltradas}
         onUpdateStatus={handleUpdateStatus}
         getBarberoNombre={getBarberoNombre}
       />
-      
-      {/* Visualización de bloques creados para la fecha actual */}
-      <h3 style={{ marginTop: '30px' }}>Bloqueos Activos para el {fechaSeleccionada}:</h3>
-      <ul>
-        {bloqueos
-          .filter(b => b.fecha === fechaSeleccionada)
-          .map(b => (
-            <li key={b.id}>
-              [{getBarberoNombre(b.barberoId)}] De {b.horaInicio} a {b.horaFin} ({b.motivo})
-            </li>
-          ))}
-      </ul>
+
+      <div className="card" style={{ marginTop: '30px' }}>
+          <h3 style={{ marginBottom: '15px' }}>Bloqueos Activos para el {fechaSeleccionada}:</h3>
+          <ul style={{ paddingLeft: '20px' }}>
+            {bloqueos
+            .filter(b => b.fecha === fechaSeleccionada)
+            .map(b => (
+                <li key={b.id} style={{ marginBottom: '5px' }}>
+                <strong>[{getBarberoNombre(b.barberoId)}]</strong> De {b.horaInicio} a {b.horaFin} ({b.motivo})
+                </li>
+            ))}
+          </ul>
+      </div>
     </div>
   );
 }

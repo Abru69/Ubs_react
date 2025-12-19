@@ -1,28 +1,39 @@
-// src/context/AuthContext.jsx
 import React, { createContext, useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null); // null = no logueado
+  // Cargar usuario de LocalStorage al iniciar
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('ubs_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  
   const navigate = useNavigate();
 
-  // Función simulada de Login (CONTROLADOR)
   const login = (email, password) => {
-    // Simulación: Si el email es admin, es administrador
+    // Simulación ADMIN
     if (email === 'admin@barber.com' && password === '123456') {
       const adminUser = { email, nombre: 'Miguel Admin', role: 'admin' };
       setUser(adminUser);
-      navigate('/admin'); // Redirigir al dashboard
+      localStorage.setItem('ubs_user', JSON.stringify(adminUser));
+      navigate('/admin');
       return { success: true };
     } 
     
-    // Simulación: Cualquier otro usuario es cliente
+    // Simulación CLIENTE
     if (email && password) {
-      const clientUser = { email, nombre: 'Cliente Nuevo', role: 'client' };
+      // En una app real, aquí validaríamos contra una DB
+      const clientUser = { 
+          email, 
+          nombre: 'Cliente Registrado', 
+          telefono: '555-0000', 
+          role: 'client' 
+      };
       setUser(clientUser);
-      navigate('/reservar'); // Redirigir a la reserva
+      localStorage.setItem('ubs_user', JSON.stringify(clientUser));
+      navigate('/mi-cuenta'); // Redirigir al portal del cliente
       return { success: true };
     }
 
@@ -31,20 +42,26 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     setUser(null);
+    localStorage.removeItem('ubs_user');
     navigate('/');
   };
 
   const register = (datosUsuario) => {
-    // Aquí conectaríamos con una API real
-    console.log('Registrando usuario:', datosUsuario);
-    // Auto-login después del registro
     const newUser = { ...datosUsuario, role: 'client' };
     setUser(newUser);
-    navigate('/reservar');
+    localStorage.setItem('ubs_user', JSON.stringify(newUser));
+    navigate('/mi-cuenta');
+  };
+
+  // NUEVO: Función para actualizar perfil
+  const updateProfile = (updatedData) => {
+      const newUser = { ...user, ...updatedData };
+      setUser(newUser);
+      localStorage.setItem('ubs_user', JSON.stringify(newUser));
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, register }}>
+    <AuthContext.Provider value={{ user, login, logout, register, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

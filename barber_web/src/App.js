@@ -1,39 +1,70 @@
 import React from 'react';
 import { ThemeProvider } from './context/ThemeContext';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext'; // Importar el contexto
+import { AuthProvider } from './context/AuthContext'; 
 import Layout from './containers/Layout';
 import './styles.css';
 
-// Contenedores
+// Componentes
 import LandingPage from './containers/Auth/LandingPage';
 import Login from './containers/Auth/Login';
 import Register from './containers/Auth/Register';
 import ClientBooking from './containers/Client/ClientBooking';
 import AdminDashboard from './containers/Admin/AdminDashboard';
+import ClientPortal from './containers/Client/ClientPortal';
+
+// Importamos el Guardia de Seguridad
+import ProtectedRoute from './components/ProtectedRoute'; 
 
 function App() {
   return (
     <Router>
-      {/* Todo dentro del AuthProvider para que login/logout funcione globalmente */}
       <ThemeProvider>
         <AuthProvider>
           <Layout>
             <Routes>
-              {/* Ruta Pública: Landing Page */}
+              {/* --- RUTAS PÚBLICAS (Cualquiera puede entrar) --- */}
               <Route path="/" element={<LandingPage />} />
-
-              {/* Rutas de Autenticación */}
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+              
+              {/* --- RUTAS DE CLIENTE (Solo usuarios registrados) --- */}
+              <Route 
+                path="/reservar" 
+                element={
+                  <ProtectedRoute allowedRoles={['client', 'admin']}>
+                    <ClientBooking />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/mi-cuenta" 
+                element={
+                  <ProtectedRoute allowedRoles={['client']}>
+                    <ClientPortal />
+                  </ProtectedRoute>
+                } 
+              />
 
-              {/* Ruta del Cliente (Ahora en /reservar) */}
-              <Route path="/reservar" element={<ClientBooking />} />
+              {/* --- RUTAS DE ADMINISTRADOR (Solo Rol 'admin') --- */}
+              <Route 
+                path="/admin" 
+                element={
+                  <ProtectedRoute allowedRoles={['admin']}>
+                    <AdminDashboard />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin/:view" 
+                element={
+                  <ProtectedRoute allowedRoles={['admin']}>
+                    <AdminDashboard />
+                  </ProtectedRoute>
+                } 
+              />
 
-              {/* Rutas del Administrador */}
-              <Route path="/admin" element={<AdminDashboard />} />
-
-              {/* Opcional: Ruta por defecto si no encuentra nada */}
+              {/* --- Fallback --- */}
               <Route path="*" element={<LandingPage />} />
             </Routes>
           </Layout>

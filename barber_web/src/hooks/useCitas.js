@@ -1,9 +1,7 @@
-// src/hooks/useCitas.js
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 // =======================================================
-// MOCK DATA (Simulando nuestra "Base de Datos" - MODELO)
+// DATOS INICIALES (Por si el LocalStorage está vacío)
 // =======================================================
 
 const BARBEROS_INICIALES = [
@@ -19,98 +17,87 @@ const SERVICIOS_INICIALES = [
 ];
 
 const CITAS_INICIALES = [
-  { 
-    id: 'c1', 
-    cliente: { nombre: 'Elena Gómez', telefono: '555-1001', email: 'elena@mail.com' }, 
-    barberoId: 'b1', 
-    servicio: 'Corte Clásico', // Usar nombre de servicio para mostrar en el cliente
-    fecha: '2025-12-15', 
-    hora: '09:00', 
-    estado: 'pendiente'
-  },
-  { 
-    id: 'c2', 
-    cliente: { nombre: 'Ricardo Solis', telefono: '555-1002', email: 'ricardo@mail.com' }, 
-    barberoId: 'b2', 
-    servicio: 'Arreglo de Barba', 
-    fecha: '2025-12-15', 
-    hora: '10:30', 
-    estado: 'confirmada' 
-  },
-  { 
-    id: 'c3', 
-    cliente: { nombre: 'Maria Paz', telefono: '555-1003', email: 'maria@mail.com' }, 
-    barberoId: 'b1', 
-    servicio: 'Corte Clásico', 
-    fecha: '2025-12-16', 
-    hora: '14:00', 
-    estado: 'pendiente' 
-  },
+  // Puedes dejar esto vacío [] si prefieres empezar de cero
 ];
-
-const BLOQUEOS_INICIALES = [
-  { 
-    id: 'b-lunch-1', 
-    barberoId: 'b1', 
-    fecha: '2025-12-16', 
-    horaInicio: '12:00', 
-    horaFin: '13:00', 
-    motivo: 'Almuerzo' 
-  },
-];
-
 
 // =======================================================
-// CUSTOM HOOK (Controlador)
+// HOOK PRINCIPAL
 // =======================================================
 
 export function useCitas() {
-  const [citas, setCitas] = useState(CITAS_INICIALES);
-  const [barberos] = useState(BARBEROS_INICIALES); 
-  const [bloqueos, setBloqueos] = useState(BLOQUEOS_INICIALES);
-  const [servicios, setServicios] = useState(SERVICIOS_INICIALES); // Estado de Servicios
+  // 1. Cargar Estados desde LocalStorage
+  const [citas, setCitas] = useState(() => {
+    const saved = localStorage.getItem('ubs_citas');
+    return saved ? JSON.parse(saved) : CITAS_INICIALES;
+  });
 
-  // --- Lógica de Citas (CRUD y Consultas) ---
+  const [barberos] = useState(BARBEROS_INICIALES); 
+
+  const [bloqueos, setBloqueos] = useState(() => {
+    const saved = localStorage.getItem('ubs_bloqueos');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [servicios, setServicios] = useState(() => {
+    const saved = localStorage.getItem('ubs_servicios');
+    return saved ? JSON.parse(saved) : SERVICIOS_INICIALES;
+  });
+
+  // 2. Guardar en LocalStorage ante cualquier cambio
+  useEffect(() => {
+    localStorage.setItem('ubs_citas', JSON.stringify(citas));
+    localStorage.setItem('ubs_servicios', JSON.stringify(servicios));
+    localStorage.setItem('ubs_bloqueos', JSON.stringify(bloqueos));
+  }, [citas, servicios, bloqueos]);
+
+  // --- Funciones de Lectura ---
 
   const getCitasPorFecha = (fecha) => {
     return citas.filter(cita => cita.fecha === fecha);
   };
+
+  // NUEVO: Obtener citas de un cliente específico (para el Portal Cliente)
+  const getCitasCliente = (email) => {
+    return citas
+      .filter(c => c.cliente.email === email)
+      .sort((a, b) => {
+         // Ordenar: Las más recientes/futuras primero
+         const dateA = new Date(`${a.fecha}T${a.hora}`);
+         const dateB = new Date(`${b.fecha}T${b.hora}`);
+         return dateB - dateA;
+      });
+  };
+
+  // --- Funciones de Escritura (Citas) ---
   
   const crearCita = (nuevaCita) => {
-    const newId = 'c' + (citas.length + 1 + Math.floor(Math.random() * 100)); 
+    const newId = 'c' + Math.floor(Math.random() * 100000); 
     const citaConId = { 
       ...nuevaCita, 
       id: newId, 
       estado: 'confirmada' 
     };
-    
-    setCitas(prevCitas => [...prevCitas, citaConId]);
+    setCitas(prev => [...prev, citaConId]);
     return citaConId;
   };
 
   const actualizarEstadoCita = (idCita, nuevoEstado) => {
-    setCitas(prevCitas =>
-      prevCitas.map(cita =>
+    setCitas(prev =>
+      prev.map(cita =>
         cita.id === idCita ? { ...cita, estado: nuevoEstado } : cita
       )
     );
   };
   
-  // --- Lógica de Bloqueos ---
+  // --- Funciones de Bloqueos ---
 
   const crearBloqueo = (nuevoBloqueo) => {
-    const newId = 'block-' + (bloqueos.length + 1 + Math.floor(Math.random() * 100)); 
-    const bloqueoConId = { 
-      ...nuevoBloqueo, 
-      id: newId, 
-    };
-    
-    setBloqueos(prevBloqueos => [...prevBloqueos, bloqueoConId]);
-    return bloqueoConId;
+    const newId = 'block-' + Math.floor(Math.random() * 10000); 
+    const bloqueoConId = { ...nuevoBloqueo, id: newId };
+    setBloqueos(prev => [...prev, bloqueoConId]);
   };
 
   const isTimeBlocked = (barberoId, fecha, hora) => {
-      // Comprueba si la hora cae dentro de un bloqueo activo
       return bloqueos.some(bloqueo => 
           bloqueo.barberoId === barberoId &&
           bloqueo.fecha === fecha &&
@@ -119,38 +106,26 @@ export function useCitas() {
       );
   };
 
-  // --- Lógica de Servicios (CRUD) ---
+  // --- Funciones de Servicios ---
   
-  const crearServicio = (nuevoServicio) => {
-    const newId = 's' + (servicios.length + 1 + Math.floor(Math.random() * 100));
-    const servicioConId = { ...nuevoServicio, id: newId };
-    setServicios(prev => [...prev, servicioConId]);
+  const crearServicio = (nuevo) => {
+    const newId = 's' + Math.floor(Math.random() * 10000);
+    setServicios(prev => [...prev, { ...nuevo, id: newId }]);
   };
 
-  const actualizarServicio = (id, datosActualizados) => {
-    setServicios(prev => prev.map(s => 
-        s.id === id ? { ...s, ...datosActualizados } : s
-    ));
+  const actualizarServicio = (id, datos) => {
+    setServicios(prev => prev.map(s => s.id === id ? { ...s, ...datos } : s));
   };
 
   const eliminarServicio = (id) => {
     setServicios(prev => prev.filter(s => s.id !== id));
   };
 
-
-  // Exportamos todo el estado y la lógica de manipulación
   return {
-    citas,
-    barberos,
-    bloqueos,
-    servicios,
-    getCitasPorFecha,
-    crearCita,
-    actualizarEstadoCita,
-    crearBloqueo,
-    isTimeBlocked,
-    crearServicio,
-    actualizarServicio,
-    eliminarServicio,
+    citas, barberos, bloqueos, servicios,
+    getCitasPorFecha, getCitasCliente, // <--- EXPORTADO
+    crearCita, actualizarEstadoCita,
+    crearBloqueo, isTimeBlocked,
+    crearServicio, actualizarServicio, eliminarServicio,
   };
 }

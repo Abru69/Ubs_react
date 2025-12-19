@@ -1,5 +1,3 @@
-// src/containers/Client/ClientBooking.jsx
-
 import React, { useState, useMemo } from 'react';
 import { useCitas } from '../../hooks/useCitas'; 
 import ServiceBarberSelector from '../../components/Client/ServiceBarberSelector';
@@ -11,105 +9,61 @@ function ClientBooking() {
   const [paso, setPaso] = useState(1);
   const [datosReserva, setDatosReserva] = useState({});
   const [mensajeConfirmacion, setMensajeConfirmacion] = useState('');
-
-  // Importamos todos los datos y lógicas necesarios del Modelo/Controlador
   const { barberos, crearCita, citas, isTimeBlocked, servicios } = useCitas(); 
   
-  // CONTROLADOR: Lógica para determinar disponibilidad
   const getDisponibilidad = (barberoId, fecha) => {
-      // 1. Horarios base (en un proyecto real, esto sería dinámico)
-      const horasBase = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00'];
-      
-      // 2. Citas existentes
-      const citasDelDia = citas.filter(c => c.barberoId === barberoId && c.fecha === fecha);
+      const horasBase = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00'];
       
       return horasBase.filter(hora => {
-        // a) Si ya está ocupada por una cita
-        const isBooked = citasDelDia.some(cita => cita.hora === hora);
-        
-        // b) Si el barbero la bloqueó manualmente
-        const isBlocked = isTimeBlocked(barberoId, fecha, hora); 
-        
-        // La hora está disponible si NO está reservada Y NO está bloqueada
-        return !isBooked && !isBlocked;
+          if (barberoId === 'any') {
+              // Disponible si AL MENOS UN barbero está libre en esa hora
+              return barberos.some(b => {
+                  const ocupado = citas.some(c => c.barberoId === b.id && c.fecha === fecha && c.hora === hora);
+                  const bloqueado = isTimeBlocked(b.id, fecha, hora);
+                  return !ocupado && !bloqueado;
+              });
+          }
+          const ocupado = citas.some(c => c.barberoId === barberoId && c.fecha === fecha && c.hora === hora);
+          const bloqueado = isTimeBlocked(barberoId, fecha, hora);
+          return !ocupado && !bloqueado;
       });
   };
   
-  // Función para avanzar y guardar datos (Paso 1 -> 2, Paso 2 -> 3)
-  const handleNextStep = (nuevosDatos) => {
-    setDatosReserva(prev => ({ ...prev, ...nuevosDatos }));
+  const handleNextStep = (datos) => {
+    setDatosReserva(prev => ({ ...prev, ...datos }));
     setPaso(prev => prev + 1);
   };
 
-  // Función CORREGIDA para completar la reserva (Paso 3 -> 4)
   const handleConfirmBooking = (datosCliente) => {
-    
-    // 1. CREAR la estructura final de la cita (juntando datos previos + datos del cliente)
-    const citaFinal = {
-        ...datosReserva,
-        cliente: datosCliente, 
-        estado: 'confirmada' 
-    };
+    // Si eligió 'any', le asignamos el primer barbero disponible en esa hora
+    let barberoAsignado = datosReserva.barberoId;
+    if (barberoAsignado === 'any') {
+        const disponible = barberos.find(b => {
+            const ocupado = citas.some(c => c.barberoId === b.id && c.fecha === datosReserva.fecha && c.hora === datosReserva.hora);
+            const bloqueado = isTimeBlocked(b.id, datosReserva.fecha, datosReserva.hora);
+            return !ocupado && !bloqueado;
+        });
+        barberoAsignado = disponible ? disponible.id : barberos[0].id;
+    }
 
-    // 2. IMPORTANTE: Actualizar el estado local antes de cambiar de paso (Corrige el error de 'email')
-    setDatosReserva(citaFinal); 
-    
-    // 3. LLAMADA AL MODELO para persistir la cita
-    const citaCreada = crearCita(citaFinal); 
-
-    // 4. CAMBIAMOS DE PASO
-    setMensajeConfirmacion(`¡Cita con ID: ${citaCreada.id} confirmada con éxito!`);
+    const citaFinal = { ...datosReserva, barberoId: barberoAsignado, cliente: datosCliente };
+    const creada = crearCita(citaFinal); 
+    setDatosReserva(citaFinal);
+    setMensajeConfirmacion(`¡Cita confirmada! Código: ${creada.id}`);
     setPaso(4); 
   };
 
-  // -------------------------------------------------------------------
-  
   return (
-    <div className="client-booking">
-      <h3>Paso {paso} de 4: {
-        paso === 1 ? 'Seleccionar Servicio y Barbero' : 
-        paso === 2 ? 'Seleccionar Fecha y Hora' : 
-        paso === 3 ? 'Ingresar Datos Personales' : 'Confirmación'
-      }</h3>
+    <div className="client-booking card" style={{ maxWidth: '800px', margin: '20px auto' }}>
+      <h2 style={{ textAlign: 'center' }}>Reserva tu Cita</h2>
+      <div className="steps-indicator" style={{ marginBottom: '30px', textAlign: 'center', color: '#666' }}>
+        Paso {paso} de 4
+      </div>
 
-      {/* RENDERIZADO CONDICIONAL DE LOS PASOS */}
-
-      {paso === 1 && (
-        <ServiceBarberSelector
-          servicios={servicios} // Usamos los servicios del hook (MODELO)
-          barberos={barberos}
-          onNext={handleNextStep}
-        />
-      )}
-
-      {paso === 2 && (
-        <TimeSelector
-          datosReserva={datosReserva}
-          getDisponibilidad={getDisponibilidad} // Lógica de disponibilidad
-          onNext={handleNextStep}
-          onBack={() => setPaso(1)}
-        />
-      )}
-
-      {paso === 3 && (
-        <ClientForm
-          datosReserva={datosReserva}
-          onConfirm={handleConfirmBooking}
-          onBack={() => setPaso(2)}
-        />
-      )}
-      
-      {paso === 4 && (
-        <BookingConfirmation
-          mensaje={mensajeConfirmacion}
-          datosReserva={datosReserva} 
-        />
-      )}
-      
-      {/* Muestra los datos que se están recolectando */}
-      <pre style={{ marginTop: '20px', border: '1px solid #eee', padding: '10px' }}>
-        Datos de la Reserva (Controlador): {JSON.stringify(datosReserva, null, 2)}
-      </pre>
+      {paso === 1 && <ServiceBarberSelector servicios={servicios} barberos={barberos} onNext={handleNextStep} />}
+      {paso === 2 && <TimeSelector datosReserva={datosReserva} getDisponibilidad={getDisponibilidad} onNext={handleNextStep} onBack={() => setPaso(1)} />}
+      {paso === 3 && <ClientForm datosReserva={datosReserva} onConfirm={handleConfirmBooking} onBack={() => setPaso(2)} />}
+      {paso === 4 && <BookingConfirmation mensaje={mensajeConfirmacion} datosReserva={datosReserva} />}
     </div>
   );
 }

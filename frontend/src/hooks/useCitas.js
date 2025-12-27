@@ -15,25 +15,40 @@ export function useCitas() {
   const [bloqueos, setBloqueos] = useState([]);
   const [barberos] = useState(BARBEROS_STATIC);
 
-  // --- FUNCIÓN PARA CARGAR DATOS DEL SERVIDOR ---
+  // --- FUNCIÓN MEJORADA PARA CARGAR DATOS ---
   const fetchData = useCallback(async () => {
     try {
+      // Hacemos las peticiones en paralelo
       const [resCitas, resServicios, resBloqueos] = await Promise.all([
         fetch(`${API_URL}/citas`),
         fetch(`${API_URL}/servicios`),
         fetch(`${API_URL}/bloqueos`)
       ]);
 
-      const dataCitas = await resCitas.json();
-      const dataServicios = await resServicios.json();
-      const dataBloqueos = await resBloqueos.json();
+      // Verificamos si las respuestas son correctas ("ok") antes de leer el JSON
+      // Esto evita el error "Unexpected token <" si el servidor falla.
+      
+      if (resCitas.ok) {
+        const data = await resCitas.json();
+        setCitas(data.map(d => ({ ...d, id: d._id })));
+      }
 
-      // Mapeamos _id de Mongo a id para que el frontend no se rompa
-      setCitas(dataCitas.map(d => ({ ...d, id: d._id })));
-      setServicios(dataServicios.map(d => ({ ...d, id: d._id })));
-      setBloqueos(dataBloqueos.map(d => ({ ...d, id: d._id })));
+      if (resServicios.ok) {
+        const data = await resServicios.json();
+        setServicios(data.map(d => ({ ...d, id: d._id })));
+      }
+
+      if (resBloqueos.ok) {
+        const data = await resBloqueos.json();
+        setBloqueos(data.map(d => ({ ...d, id: d._id })));
+      } else {
+        // Si falla la carga de bloqueos, no rompemos la app, solo avisamos en consola
+        console.warn("No se pudieron cargar bloqueos (posiblemente la ruta no existe aún o dio error 404)");
+        setBloqueos([]); 
+      }
+
     } catch (error) {
-      console.error("Error conectando al backend:", error);
+      console.error("Error general conectando al backend:", error);
     }
   }, []);
 
@@ -66,6 +81,7 @@ export function useCitas() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(nuevaCita)
     });
+    if (!res.ok) throw new Error("Error al guardar cita"); // Validación extra
     const data = await res.json();
     const citaFinal = { ...data, id: data._id };
     setCitas(prev => [...prev, citaFinal]);
@@ -73,7 +89,7 @@ export function useCitas() {
   };
 
   const actualizarEstadoCita = async (id, estado) => {
-    // Optimistic UI update (actualiza visualmente antes de esperar al server)
+    // Optimistic UI update
     setCitas(prev => prev.map(c => c.id === id ? { ...c, estado } : c));
     
     await fetch(`${API_URL}/citas/${id}`, {
@@ -89,6 +105,7 @@ export function useCitas() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(bloqueo)
     });
+    if (!res.ok) throw new Error("Error al crear bloqueo");
     const data = await res.json();
     setBloqueos(prev => [...prev, { ...data, id: data._id }]);
   };
@@ -99,6 +116,7 @@ export function useCitas() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(servicio)
     });
+    if (!res.ok) throw new Error("Error al crear servicio");
     const data = await res.json();
     setServicios(prev => [...prev, { ...data, id: data._id }]);
   };

@@ -34,8 +34,10 @@ function ClientBooking() {
     setPaso(prev => prev + 1);
   };
 
-  const handleConfirmBooking = (datosCliente) => {
-    // Si eligió 'any', le asignamos el primer barbero disponible en esa hora
+  // Agregamos 'async' aquí para poder esperar la respuesta del servidor
+  const handleConfirmBooking = async (datosCliente) => {
+    
+    // Lógica para asignar barbero si eligió 'any'
     let barberoAsignado = datosReserva.barberoId;
     if (barberoAsignado === 'any') {
         const disponible = barberos.find(b => {
@@ -43,14 +45,30 @@ function ClientBooking() {
             const bloqueado = isTimeBlocked(b.id, datosReserva.fecha, datosReserva.hora);
             return !ocupado && !bloqueado;
         });
-        barberoAsignado = disponible ? disponible.id : barberos[0].id;
+        barberoAsignado = disponible ? disponible.id : barberos[0].id; // Fallback al primero si no hay
     }
 
-    const citaFinal = { ...datosReserva, barberoId: barberoAsignado, cliente: datosCliente };
-    const creada = crearCita(citaFinal); 
-    setDatosReserva(citaFinal);
-    setMensajeConfirmacion(`¡Cita confirmada! Código: ${creada.id}`);
-    setPaso(4); 
+    // --- CORRECCIÓN AQUÍ ---
+    // Creamos el objeto exacto que pide el Backend (Cita.js)
+    const citaFinal = { 
+      fecha: datosReserva.fecha,
+      hora: datosReserva.hora,
+      barberoId: barberoAsignado,
+      cliente: datosCliente,
+      servicio: datosReserva.servicioNombre // <--- ¡AQUÍ ESTABA EL ERROR! Mapeamos el nombre al campo 'servicio'
+    };
+
+    try {
+      // Usamos await para esperar a que se guarde en la BD antes de confirmar
+      const creada = await crearCita(citaFinal); 
+      
+      setDatosReserva(citaFinal);
+      setMensajeConfirmacion(`¡Cita confirmada! Código: ${creada.id}`);
+      setPaso(4); 
+    } catch (error) {
+      console.error("Error reservando:", error);
+      alert("Hubo un error al crear la reserva. Intenta nuevamente.");
+    }
   };
 
   return (

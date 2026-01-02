@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useCitas } from '../../hooks/useCitas';
 import DataWidget from '../../components/Admin/DataWidget'; 
@@ -7,44 +7,55 @@ import ServiceManager from '../../components/Admin/ServiceManager';
 import TimeBlocker from '../../components/Admin/TimeBlocker';
 
 function AdminDashboard() {
-  const { view } = useParams(); // Detecta si es 'citas', 'servicios' o 'clientes'
+  const { view } = useParams();
   const {
-    citas, barberos, servicios, bloqueos,
-    actualizarEstadoCita, crearBloqueo, crearServicio, actualizarServicio, eliminarServicio
+    citas, barberos, servicios, clientesDb,
+    actualizarEstadoCita, crearBloqueo, crearServicio, actualizarServicio, eliminarServicio,
+    refetch 
   } = useCitas();
 
-  // Lógica para Clientes Únicos
-  const clientesUnicos = useMemo(() => {
-    const map = new Map();
-    citas.forEach(c => {
-      if (!map.has(c.cliente.email)) {
-        map.set(c.cliente.email, { 
-          ...c.cliente, 
-          totalCitas: 1, 
-          ultimaCita: c.fecha 
-        });
-      } else {
-        const existing = map.get(c.cliente.email);
-        existing.totalCitas += 1;
-        if (c.fecha > existing.ultimaCita) existing.ultimaCita = c.fecha;
-      }
-    });
-    return Array.from(map.values());
-  }, [citas]);
+  // --- AUTO-RECARGA DE DATOS (Notificaciones) ---
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log("Auto-recargando datos...");
+      refetch();
+    }, 30000); // Cada 30 segundos
+    return () => clearInterval(interval);
+  }, [refetch]);
+
+  // --- CALCULOS ---
+  const citasPendientes = useMemo(() => citas.filter(c => c.estado === 'pendiente').length, [citas]);
+
+  const totalVentas = useMemo(() => {
+    return citas
+      .filter(c => c.estado === 'completada')
+      .reduce((total, cita) => {
+        const servicioInfo = servicios.find(s => s.nombre === cita.servicio);
+        return total + (servicioInfo ? servicioInfo.precio : 0);
+      }, 0);
+  }, [citas, servicios]);
 
   const getBarberoNombre = (id) => barberos.find(b => b.id === id)?.nombre || 'Sin asignar';
 
-  // --- RENDERS DE VISTAS ---
+  // --- RENDERS ---
 
   const renderDashboardPrincipal = () => (
     <>
+      {/* Alerta de Nuevas Citas */}
+      {citasPendientes > 0 && (
+        <div style={{ backgroundColor: '#fff3cd', color: '#856404', padding: '15px', borderRadius: '5px', marginBottom: '20px', border: '1px solid #ffeeba' }}>
+          🔔 <strong>Atención:</strong> Tienes {citasPendientes} cita(s) pendiente(s) de atender.
+        </div>
+      )}
+
       <div className="data-widget-grid">
-        <DataWidget title="Total Citas" value={citas.length} colorClass="widget-citas-total" />
-        <DataWidget title="Clientes" value={clientesUnicos.length} colorClass="widget-clientes-total" />
-        <DataWidget title="Servicios" value={servicios.length} colorClass="widget-servicios-total" />
+        <DataWidget title="Citas Pendientes" value={citasPendientes} colorClass="widget-citas-total" />
+        <DataWidget title="Ingresos Totales" value={`$${totalVentas}`} colorClass="widget-servicios-total" />
+        <DataWidget title="Usuarios Registrados" value={clientesDb.length} colorClass="widget-clientes-total" />
       </div>
+
       <div className="card" style={{ marginTop: '20px' }}>
-        <h3>Citas de Hoy</h3>
+        <h3>Agenda de Hoy</h3>
         <DailyAppointments 
           fecha={new Date().toISOString().split('T')[0]} 
           citas={citas.filter(c => c.fecha === new Date().toISOString().split('T')[0])} 
@@ -57,11 +68,11 @@ function AdminDashboard() {
 
   const renderTodasLasCitas = () => (
     <div className="card">
-      <h3>Historial Completo de Citas</h3>
+      <h3>Historial Completo</h3>
       <table className="admin-table">
         <thead>
           <tr>
-            <th>Fecha/Hora</th>
+            <th>Fecha</th>
             <th>Cliente</th>
             <th>Servicio</th>
             <th>Barbero</th>
@@ -71,15 +82,15 @@ function AdminDashboard() {
         </thead>
         <tbody>
           {citas.map(c => (
-            <tr key={c.id}>
-              <td>{c.fecha} - {c.hora}</td>
-              <td>{c.cliente.nombre}<br/><small>{c.cliente.telefono}</small></td>
+            <tr key={c.id} style={{ backgroundColor: c.estado === 'pendiente' ? '#fff9e6' : 'transparent' }}>
+              <td>{c.fecha} <br/> <strong>{c.hora}</strong></td>
+              <td>{c.cliente.nombre}</td>
               <td>{c.servicio}</td>
               <td>{getBarberoNombre(c.barberoId)}</td>
               <td><span className={`status-badge ${c.estado}`}>{c.estado}</span></td>
               <td>
-                <button onClick={() => actualizarEstadoCita(c.id, 'completada')} className="btn-small green">✓</button>
-                <button onClick={() => actualizarEstadoCita(c.id, 'cancelada')} className="btn-small red">X</button>
+                <button onClick={() => actualizarEstadoCita(c.id, 'completada')} className="btn-small green" title="Completar">✓</button>
+                <button onClick={() => actualizarEstadoCita(c.id, 'cancelada')} className="btn-small red" title="Cancelar">X</button>
               </td>
             </tr>
           ))}
@@ -90,25 +101,27 @@ function AdminDashboard() {
 
   const renderClientes = () => (
     <div className="card">
-      <h3>Base de Datos de Clientes</h3>
+      <h3>Base de Datos de Usuarios (Registrados)</h3>
       <table className="admin-table">
         <thead>
           <tr>
             <th>Nombre</th>
-            <th>Contacto</th>
-            <th>Total Visitas</th>
-            <th>Última Visita</th>
+            <th>Email</th>
+            <th>Teléfono</th>
+            <th>Rol</th>
           </tr>
         </thead>
         <tbody>
-          {clientesUnicos.map(cli => (
-            <tr key={cli.email}>
-              <td><strong>{cli.nombre}</strong></td>
-              <td>{cli.email}<br/>{cli.telefono}</td>
-              <td>{cli.totalCitas}</td>
-              <td>{cli.ultimaCita}</td>
+          {clientesDb.length > 0 ? clientesDb.map(user => (
+            <tr key={user._id || user.id}>
+              <td><strong>{user.nombre}</strong></td>
+              <td>{user.email}</td>
+              <td>{user.telefono}</td>
+              <td>{user.role}</td>
             </tr>
-          ))}
+          )) : (
+            <tr><td colSpan="4" style={{textAlign: 'center'}}>No hay usuarios registrados aún.</td></tr>
+          )}
         </tbody>
       </table>
     </div>
@@ -116,7 +129,10 @@ function AdminDashboard() {
 
   return (
     <div className="admin-dashboard-container">
-      <h2>Panel: {view ? view.toUpperCase() : 'GENERAL'}</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>Panel: {view ? view.toUpperCase() : 'GENERAL'}</h2>
+        <button onClick={() => refetch()} className="btn-small" style={{ marginBottom: '10px' }}>↻ Recargar Datos</button>
+      </div>
       
       {!view && renderDashboardPrincipal()}
       {view === 'citas' && renderTodasLasCitas()}
